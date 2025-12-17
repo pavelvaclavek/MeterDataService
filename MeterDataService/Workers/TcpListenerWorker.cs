@@ -67,8 +67,7 @@ public class TcpListenerWorker : BackgroundService
         {
             await using NetworkStream stream = client.GetStream();
             
-            using var reader = new StreamReader(stream, Encoding.UTF8);
-            await using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+            using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
 
             var buffer = new StringBuilder();
             var charBuffer = new char[4096];
@@ -100,21 +99,29 @@ public class TcpListenerWorker : BackgroundService
                     {
                         try
                         {
+                            var receivedAt = DateTime.UtcNow;
                             var message = JsonSerializer.Deserialize<MeterMessage>(jsonMessage);
                             if (message != null)
                             {
                                 await _providerManager.ProcessMessageAsync(message, stoppingToken);
 
-                                // Send ACK response
-                                var ack = new { status = "ok", sn = message.Sn, timestamp = DateTime.UtcNow };
-                                await writer.WriteLineAsync(JsonSerializer.Serialize(ack));
+                                // Send ACK response directly to stream
+                                var ack = new { status = "ok", sn = message.Sn, timestamp = DateTime.UtcNow };                               
+                                var response = JsonSerializer.Serialize(ack) + "\n";
+                                var responseBytes = Encoding.UTF8.GetBytes(response);
+                                await stream.WriteAsync(responseBytes, stoppingToken);
+                                await stream.FlushAsync(stoppingToken);
+                            
                                 _logger.LogInformation("Message processed and acknowledged for SN: {Sn}", message.Sn);
                             }
                         }
                         catch (JsonException ex)
                         {
                             _logger.LogWarning(ex, "Invalid JSON received: {Json}", jsonMessage);
-                            await writer.WriteLineAsync("{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+                            var errorResponse = "{\"status\":\"error\",\"message\":\"Invalid JSON\"}\n";
+                            var errorBytes = Encoding.UTF8.GetBytes(errorResponse);
+                            await stream.WriteAsync(errorBytes, stoppingToken);
+                            await stream.FlushAsync(stoppingToken);
                         }
                     }
                 }
