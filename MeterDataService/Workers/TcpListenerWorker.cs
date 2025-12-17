@@ -110,6 +110,7 @@ public class TcpListenerWorker : BackgroundService
                                 var response = JsonSerializer.Serialize(ack) + "\n";
                                 var responseBytes = Encoding.UTF8.GetBytes(response);
                                 await stream.WriteAsync(responseBytes, stoppingToken);
+                                // call always await stream.FlushAsync to ensure data is sent immediately
                                 await stream.FlushAsync(stoppingToken);
                             
                                 _logger.LogInformation("Message processed and acknowledged for SN: {Sn}", message.Sn);

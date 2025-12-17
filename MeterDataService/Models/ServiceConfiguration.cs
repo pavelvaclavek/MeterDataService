@@ -6,6 +6,7 @@
         public string CsvOutputPath { get; set; } = "C:\\MeterData";
         public List<string> EnabledProviders { get; set; } = new() { "csv" };
         public EmailSettings Email { get; set; } = new();
+        public DatabaseSettings Database { get; set; } = new();
     }
 
     public class EmailSettings
@@ -17,5 +18,10 @@
         public string FromAddress { get; set; } = string.Empty;
         public List<string> ToAddresses { get; set; } = new();
         public bool UseSsl { get; set; } = true;
+    }
+
+    public class DatabaseSettings
+    {
+        public string ConnectionString { get; set; } = string.Empty;
     }
 }
