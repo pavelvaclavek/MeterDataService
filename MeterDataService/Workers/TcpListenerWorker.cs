@@ -66,6 +66,7 @@ public class TcpListenerWorker : BackgroundService
         try
         {
             await using NetworkStream stream = client.GetStream();
+            
             using var reader = new StreamReader(stream, Encoding.UTF8);
             await using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
 
@@ -73,40 +74,69 @@ public class TcpListenerWorker : BackgroundService
             var charBuffer = new char[4096];
             int bytesRead;
 
-            while ((bytesRead = await reader.ReadAsync(charBuffer, stoppingToken)) > 0)
+            while (!stoppingToken.IsCancellationRequested)
             {
-                buffer.Append(charBuffer, 0, bytesRead);
-                var content = buffer.ToString();
-
-                // Try to parse complete JSON messages
-                var messages = ExtractJsonMessages(ref content);
-                buffer.Clear();
-                buffer.Append(content);
-
-                foreach (var jsonMessage in messages)
+                try
                 {
-                    try
-                    {
-                        var message = JsonSerializer.Deserialize<MeterMessage>(jsonMessage);
-                        if (message != null)
-                        {
-                            await _providerManager.ProcessMessageAsync(message, stoppingToken);
+                    // Use ReadAsync with Memory<char> overload that supports CancellationToken
+                    bytesRead = await reader.ReadAsync(charBuffer.AsMemory(), stoppingToken);
 
-                            // Send ACK response
-                            var ack = new { status = "ok", sn = message.Sn, timestamp = DateTime.UtcNow };
-                            await writer.WriteLineAsync(JsonSerializer.Serialize(ack));
-                            _logger.LogInformation("Message processed and acknowledged for SN: {Sn}", message.Sn);
+                    if (bytesRead == 0)
+                    {
+                        // Client disconnected gracefully
+                        _logger.LogDebug("Client {Endpoint} disconnected gracefully", clientEndpoint);
+                        break;
+                    }
+
+                    buffer.Append(charBuffer, 0, bytesRead);
+                    var content = buffer.ToString();
+
+                    // Try to parse complete JSON messages
+                    var messages = ExtractJsonMessages(ref content);
+                    buffer.Clear();
+                    buffer.Append(content);
+
+                    foreach (var jsonMessage in messages)
+                    {
+                        try
+                        {
+                            var message = JsonSerializer.Deserialize<MeterMessage>(jsonMessage);
+                            if (message != null)
+                            {
+                                await _providerManager.ProcessMessageAsync(message, stoppingToken);
+
+                                // Send ACK response
+                                var ack = new { status = "ok", sn = message.Sn, timestamp = DateTime.UtcNow };
+                                await writer.WriteLineAsync(JsonSerializer.Serialize(ack));
+                                _logger.LogInformation("Message processed and acknowledged for SN: {Sn}", message.Sn);
+                            }
+                        }
+                        catch (JsonException ex)
+                        {
+                            _logger.LogWarning(ex, "Invalid JSON received: {Json}", jsonMessage);
+                            await writer.WriteLineAsync("{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
                         }
                     }
-                    catch (JsonException ex)
-                    {
-                        _logger.LogWarning(ex, "Invalid JSON received: {Json}", jsonMessage);
-                        await writer.WriteLineAsync("{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
-                    }
+                }
+                catch (IOException ex)
+                {
+                    // Connection was closed or reset by the client
+                    _logger.LogDebug("Connection closed by client {Endpoint}: {Message}", clientEndpoint, ex.Message);
+                    break;
+                }
+                catch (SocketException ex)
+                {
+                    // Socket error occurred
+                    _logger.LogDebug("Socket error with client {Endpoint}: {Message}", clientEndpoint, ex.Message);
+                    break;
                 }
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Operation cancelled for client {Endpoint}", clientEndpoint);
+        }
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling client {Endpoint}", clientEndpoint);
         }

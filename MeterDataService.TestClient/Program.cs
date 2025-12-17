@@ -372,7 +372,7 @@ class Program
 
         Console.Write("Odesílám... ");
         var result = await SendMessageAsync(json);
-
+       
         if (result.Success)
         {
             WriteColorLine(
@@ -404,6 +404,7 @@ class Program
             using var client = new TcpClient();
 
             var connectTask = client.ConnectAsync(_targetHost, _targetPort);
+            
             if (await Task.WhenAny(
                     connectTask, Task.Delay(TimeSpan.FromSeconds(_timeoutSeconds))) !=
                 connectTask)
