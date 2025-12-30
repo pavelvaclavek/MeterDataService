@@ -7,6 +7,7 @@
         public List<string> EnabledProviders { get; set; } = new() { "csv" };
         public EmailSettings Email { get; set; } = new();
         public DatabaseSettings Database { get; set; } = new();
+        public SqliteSettings Sqlite { get; set; } = new();
     }
 
     public class EmailSettings
@@ -23,5 +24,17 @@
     public class DatabaseSettings
     {
         public string ConnectionString { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Nastavení pro SQLite databázi.
+    /// </summary>
+    public class SqliteSettings
+    {
+        /// <summary>
+        /// Cesta k SQLite databázovému souboru.
+        /// Může být absolutní (C:\Data\MeterData.db) nebo relativní (MeterData.db).
+        /// </summary>
+        public string DatabasePath { get; set; } = "MeterData.db";
     }
 }
