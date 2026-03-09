@@ -66,7 +66,7 @@ public class TcpListenerWorker : BackgroundService
         try
         {
             await using NetworkStream stream = client.GetStream();
-            
+
             using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
 
             var buffer = new StringBuilder();
@@ -99,25 +99,72 @@ public class TcpListenerWorker : BackgroundService
                     {
                         try
                         {
-                            var receivedAt = DateTime.UtcNow;
-                            var message = JsonSerializer.Deserialize<MeterMessage>(jsonMessage);
-                            if (message != null)
+                            // --- DLMS detection: peek at result.data value kind ---
+                            bool isDlms = false;
+                            try
                             {
-                                await _providerManager.ProcessMessageAsync(message, stoppingToken);
+                                using var doc = JsonDocument.Parse(jsonMessage);
+                                isDlms = doc.RootElement.TryGetProperty("result", out var resultEl)
+                                      && resultEl.TryGetProperty("data", out var dataEl)
+                                      && dataEl.ValueKind == JsonValueKind.Array;
+                            }
+                            catch
+                            {
+                                // If JsonDocument.Parse fails, fall through to existing path which
+                                // will also fail and send the error response.
+                            }
 
-                                // Send ACK response directly to stream
-                                var ack = new { status = "ok", sn = message.Sn, timestamp = DateTime.UtcNow };                               
-                                var response = JsonSerializer.Serialize(ack) + "\n";
-                                var responseBytes = Encoding.UTF8.GetBytes(response);
-                                await stream.WriteAsync(responseBytes, stoppingToken);
-                                // call always await stream.FlushAsync to ensure data is sent immediately
-                                await stream.FlushAsync(stoppingToken);
-                            
-                                _logger.LogInformation("Message processed and acknowledged for SN: {Sn}", message.Sn);
+                            if (isDlms)
+                            {
+                                // --- DLMS branch ---
+                                var dlmsMsg = JsonSerializer.Deserialize<DlmsMessage>(jsonMessage);
+                                if (dlmsMsg != null)
+                                {
+                                    var meterMessages = DlmsMessageConverter.ToMeterMessages(dlmsMsg).ToList();
+                                    foreach (var msg in meterMessages)
+                                    {
+                                        await _providerManager.ProcessMessageAsync(msg, stoppingToken);
+                                    }
+
+                                    var ack = new
+                                    {
+                                        status = "ok",
+                                        sn = dlmsMsg.Sn,
+                                        count = meterMessages.Count,
+                                        timestamp = DateTime.UtcNow
+                                    };
+                                    var response = JsonSerializer.Serialize(ack) + "\n";
+                                    var responseBytes = Encoding.UTF8.GetBytes(response);
+                                    await stream.WriteAsync(responseBytes, stoppingToken);
+                                    await stream.FlushAsync(stoppingToken);
+
+                                    _logger.LogInformation(
+                                        "DLMS message processed: SN={Sn}, Rows={Count}", dlmsMsg.Sn, meterMessages.Count);
+                                }
+                            }
+                            else
+                            {
+                                // --- Existing MeterMessage branch (UNCHANGED) ---
+                                var message = JsonSerializer.Deserialize<MeterMessage>(jsonMessage);
+                                if (message != null)
+                                {
+                                    await _providerManager.ProcessMessageAsync(message, stoppingToken);
+
+                                    // Send ACK response directly to stream
+                                    var ack = new { status = "ok", sn = message.Sn, timestamp = DateTime.UtcNow };
+                                    var response = JsonSerializer.Serialize(ack) + "\n";
+                                    var responseBytes = Encoding.UTF8.GetBytes(response);
+                                    await stream.WriteAsync(responseBytes, stoppingToken);
+                                    // call always await stream.FlushAsync to ensure data is sent immediately
+                                    await stream.FlushAsync(stoppingToken);
+
+                                    _logger.LogInformation("Message processed and acknowledged for SN: {Sn}", message.Sn);
+                                }
                             }
                         }
                         catch (JsonException ex)
                         {
+                            // Catches deserialization failures from BOTH branches
                             _logger.LogWarning(ex, "Invalid JSON received: {Json}", jsonMessage);
                             var errorResponse = "{\"status\":\"error\",\"message\":\"Invalid JSON\"}\n";
                             var errorBytes = Encoding.UTF8.GetBytes(errorResponse);
