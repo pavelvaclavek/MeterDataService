@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeterDataService", "MeterDa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeterDataService.TestClient", "MeterDataService.TestClient\MeterDataService.TestClient.csproj", "{57308C74-8566-B9E8-C716-3A8A3B7BB34E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeterDataService.Net48", "MeterDataService.Net48\MeterDataService.Net48.csproj", "{7F903050-4D3C-195C-D711-CDA0791AAB61}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{57308C74-8566-B9E8-C716-3A8A3B7BB34E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{57308C74-8566-B9E8-C716-3A8A3B7BB34E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{57308C74-8566-B9E8-C716-3A8A3B7BB34E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F903050-4D3C-195C-D711-CDA0791AAB61}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F903050-4D3C-195C-D711-CDA0791AAB61}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F903050-4D3C-195C-D711-CDA0791AAB61}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F903050-4D3C-195C-D711-CDA0791AAB61}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
