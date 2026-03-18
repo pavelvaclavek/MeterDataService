@@ -78,6 +78,10 @@ namespace MeterDataService.Net48.Models
             if (bool.TryParse(loggingEnabled, out var enabled))
                 config.AppLogging.Enabled = enabled;
 
+            var includeJson = ConfigurationManager.AppSettings["AppLogging:IncludeJsonInMessage"];
+            if (bool.TryParse(includeJson, out var includeJsonValue))
+                config.AppLogging.IncludeJsonInMessage = includeJsonValue;
+
             return config;
         }
     }
@@ -117,5 +121,11 @@ namespace MeterDataService.Net48.Models
         /// Povolit logování do databáze.
         /// </summary>
         public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// Zahrnout JSON zprávu do textu logované Message.
+        /// Pokud false, do Message se uloží pouze informace o chybì bez obsahu JSON.
+        /// </summary>
+        public bool IncludeJsonInMessage { get; set; } = false;
     }
 }

@@ -53,5 +53,11 @@
         /// Povolit logování do databáze.
         /// </summary>
         public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// Zahrnout JSON zprávu do textu logované Message.
+        /// Pokud false, do Message se uloží pouze informace o chybě bez obsahu JSON.
+        /// </summary>
+        public bool IncludeJsonInMessage { get; set; } = false;
     }
 }

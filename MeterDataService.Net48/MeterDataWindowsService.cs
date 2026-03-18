@@ -271,12 +271,15 @@ namespace MeterDataService.Net48
                                 }
                                 catch (JsonException ex)
                                 {
-                                    _eventLog.WriteEntry(
+                                    _eventLog.WriteEntry( 
                                         string.Format("Invalid JSON received: {0}", ex.Message),
-                                        EventLogEntryType.Warning);
-                                    await _appLogger.LogErrorAsync(
-                                        string.Format("Invalid JSON received from {0}. JSON {1} ", clientEndpoint, jsonMessage), ex,
-                                        "TcpListener", clientIp);
+                                        EventLogEntryType.Error);
+                             
+                                    var logMessage = _config.AppLogging.IncludeJsonInMessage
+                                           ? $"Invalid JSON received from {clientEndpoint}. JSON message: {jsonMessage}"
+                                           : $"Invalid JSON received from {clientEndpoint}";
+
+                                    await _appLogger.LogErrorAsync(logMessage, ex, "Error", clientIp);
 
                                     var errorResponse = "{\"status\":\"error\",\"message\":\"Invalid JSON\"}\n";
                                     var errorBytes = Encoding.UTF8.GetBytes(errorResponse);
@@ -287,15 +290,15 @@ namespace MeterDataService.Net48
                         }
                         catch (IOException ex)
                         {
-                            await _appLogger.LogWarningAsync(
-                                string.Format("Connection closed by client {0}: {1}", clientEndpoint, ex.Message),
+                            await _appLogger.LogErrorAsync(
+                                string.Format("Connnection closed by client {0}: {1}", clientEndpoint, ex.Message), ex,
                                 "TcpListener", clientIp);
                             break;
                         }
                         catch (SocketException ex)
                         {
-                            await _appLogger.LogWarningAsync(
-                                string.Format("Socket error with client {0}: {1}", clientEndpoint, ex.Message),
+                            await _appLogger.LogErrorAsync(
+                                string.Format("Socket error with client {0}: {1}", clientEndpoint, ex.Message), ex,
                                 "TcpListener", clientIp);
                             break;
                         }

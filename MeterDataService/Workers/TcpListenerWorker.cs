@@ -176,8 +176,13 @@ public class TcpListenerWorker : BackgroundService
                         catch (JsonException ex)
                         {
                             _logger.LogWarning(ex, "Invalid JSON received: {Json}", jsonMessage);
-                            await _appLogger.LogErrorAsync(
-                                $"Invalid JSON received from {clientEndpoint}. JSON message {jsonMessage}", ex, "Error", clientIp);
+
+                            var logMessage = _config.AppLogging.IncludeJsonInMessage
+                                ? $"Invalid JSON received from {clientEndpoint}. JSON message: {jsonMessage}"
+                                : $"Invalid JSON received from {clientEndpoint}";
+
+                            await _appLogger.LogErrorAsync(logMessage, ex, "Error", clientIp);
+
                             var errorResponse = "{\"status\":\"error\",\"message\":\"Invalid JSON\"}\n";
                             var errorBytes = Encoding.UTF8.GetBytes(errorResponse);
                             await stream.WriteAsync(errorBytes, stoppingToken);
