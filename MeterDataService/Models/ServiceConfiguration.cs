@@ -8,6 +8,7 @@
         public EmailSettings Email { get; set; } = new();
         public DatabaseSettings Database { get; set; } = new();
         public SqliteSettings Sqlite { get; set; } = new();
+        public LoggingSettings AppLogging { get; set; } = new();
     }
 
     public class EmailSettings
@@ -36,5 +37,21 @@
         /// Může být absolutní (C:\Data\MeterData.db) nebo relativní (MeterData.db).
         /// </summary>
         public string DatabasePath { get; set; } = "MeterData.db";
+    }
+
+    /// <summary>
+    /// Nastavení pro aplikační logování do databáze.
+    /// </summary>
+    public class LoggingSettings
+    {
+        /// <summary>
+        /// Typ loggeru: "sqlite" nebo "none".
+        /// </summary>
+        public string Logger { get; set; } = "sqlite";
+
+        /// <summary>
+        /// Povolit logování do databáze.
+        /// </summary>
+        public bool Enabled { get; set; } = true;
     }
 }

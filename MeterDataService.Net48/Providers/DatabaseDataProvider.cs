@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MeterDataService.Net48.Data;
+using MeterDataService.Net48.Logging;
 using MeterDataService.Net48.Models;
 
 namespace MeterDataService.Net48.Providers
@@ -15,12 +16,14 @@ namespace MeterDataService.Net48.Providers
         private static readonly Regex MeterDataRegex = new Regex(@"(\d+\.\d+\.\d+)\(([^)]+)\)", RegexOptions.Compiled);
 
         private readonly EventLog _eventLog;
+        private readonly IAppLogger _appLogger;
 
         public string Name => "database";
 
-        public DatabaseDataProvider(EventLog eventLog)
+        public DatabaseDataProvider(EventLog eventLog, IAppLogger appLogger)
         {
             _eventLog = eventLog;
+            _appLogger = appLogger;
         }
 
         public async Task<bool> ProcessAsync(MeterMessage message, CancellationToken cancellationToken)
@@ -63,6 +66,9 @@ namespace MeterDataService.Net48.Providers
                 _eventLog.WriteEntry(
                     string.Format("Error saving data to database for SN: {0}: {1}", message.Sn, ex),
                     EventLogEntryType.Error);
+                await _appLogger.LogErrorAsync(
+                    string.Format("Error saving data to database for SN: {0}", message.Sn),
+                    ex, "Provider.database");
                 return false;
             }
         }

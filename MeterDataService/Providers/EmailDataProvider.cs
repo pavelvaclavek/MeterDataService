@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Net.Mail;
 using System.Text;
+using MeterDataService.Logging;
 using MeterDataService.Models;
 using Microsoft.Extensions.Options;
 
@@ -9,13 +10,18 @@ namespace MeterDataService.Providers
     public class EmailDataProvider : IDataProvider
     {
         private readonly ILogger<EmailDataProvider> _logger;
+        private readonly IAppLogger _appLogger;
         private readonly ServiceConfiguration _config;
 
         public string Name => "email";
 
-        public EmailDataProvider(ILogger<EmailDataProvider> logger, IOptions<ServiceConfiguration> config)
+        public EmailDataProvider(
+            ILogger<EmailDataProvider> logger,
+            IAppLogger appLogger,
+            IOptions<ServiceConfiguration> config)
         {
             _logger = logger;
+            _appLogger = appLogger;
             _config = config.Value;
         }
 
@@ -24,6 +30,8 @@ namespace MeterDataService.Providers
             if (string.IsNullOrEmpty(_config.Email.SmtpServer))
             {
                 _logger.LogWarning("Email provider is enabled but SMTP server is not configured");
+                await _appLogger.LogWarningAsync(
+                    "Email provider is enabled but SMTP server is not configured", "Provider.email");
                 return false;
             }
 
@@ -59,6 +67,8 @@ namespace MeterDataService.Providers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending email for SN: {Sn}", message.Sn);
+                await _appLogger.LogErrorAsync(
+                    $"Error sending email for SN: {message.Sn}", ex, "Provider.email");
                 return false;
             }
         }

@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Text;
+using MeterDataService.Logging;
 using MeterDataService.Models;
 using Microsoft.Extensions.Options;
 
@@ -8,14 +9,19 @@ namespace MeterDataService.Providers
     public class CsvDataProvider : IDataProvider
     {
         private readonly ILogger<CsvDataProvider> _logger;
+        private readonly IAppLogger _appLogger;
         private readonly ServiceConfiguration _config;
         private readonly SemaphoreSlim _fileLock = new(1, 1);
 
         public string Name => "csv";
 
-        public CsvDataProvider(ILogger<CsvDataProvider> logger, IOptions<ServiceConfiguration> config)
+        public CsvDataProvider(
+            ILogger<CsvDataProvider> logger,
+            IAppLogger appLogger,
+            IOptions<ServiceConfiguration> config)
         {
             _logger = logger;
+            _appLogger = appLogger;
             _config = config.Value;
         }
 
@@ -66,6 +72,8 @@ namespace MeterDataService.Providers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving data to CSV for SN: {Sn}", message.Sn);
+                await _appLogger.LogErrorAsync(
+                    $"Error saving data to CSV for SN: {message.Sn}", ex, "Provider.csv");
                 return false;
             }
         }

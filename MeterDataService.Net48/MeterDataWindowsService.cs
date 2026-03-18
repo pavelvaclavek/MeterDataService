@@ -9,6 +9,7 @@ using System.ServiceProcess;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MeterDataService.Net48.Logging;
 using MeterDataService.Net48.Models;
 using MeterDataService.Net48.Providers;
 using MeterDataService.Net48.Workers;
@@ -25,6 +26,7 @@ namespace MeterDataService.Net48
         private Task _listenerTask;
         private ServiceConfiguration _config;
         private IDataProviderManager _providerManager;
+        private IAppLogger _appLogger;
 
         public MeterDataWindowsService()
         {
@@ -46,16 +48,27 @@ namespace MeterDataService.Net48
             _config = ServiceConfiguration.Load();
             _cts = new CancellationTokenSource();
 
+            // Inicializace App Loggeru - konfigurovatelný
+            if (_config.AppLogging.Enabled &&
+                string.Equals(_config.AppLogging.Logger, "sqlite", StringComparison.OrdinalIgnoreCase))
+            {
+                _appLogger = new SqliteAppLogger(_eventLog, _config.Sqlite.DatabasePath);
+            }
+            else
+            {
+                _appLogger = new NullAppLogger();
+            }
+
             // Inicializace provideru
             var providers = new List<IDataProvider>
             {
-                new CsvDataProvider(_eventLog, _config),
-                new EmailDataProvider(_eventLog, _config),
-                new DatabaseDataProvider(_eventLog),
-                new SqliteDataProvider(_eventLog, _config)
+                new CsvDataProvider(_eventLog, _appLogger, _config),
+                new EmailDataProvider(_eventLog, _appLogger, _config),
+                new DatabaseDataProvider(_eventLog, _appLogger),
+                new SqliteDataProvider(_eventLog, _appLogger, _config)
             };
 
-            _providerManager = new DataProviderManager(_eventLog, providers, _config);
+            _providerManager = new DataProviderManager(_eventLog, _appLogger, providers, _config);
 
             // Spusteni TCP listeneru na pozadi
             _listenerTask = Task.Run(() => RunTcpListenerAsync(_cts.Token));
@@ -68,6 +81,7 @@ namespace MeterDataService.Net48
         protected override void OnStop()
         {
             _eventLog.WriteEntry("MeterDataService stopping...", EventLogEntryType.Information);
+            _appLogger.LogInformationAsync("MeterDataService stopping", "Service").Wait();
 
             _cts.Cancel();
 
@@ -104,6 +118,8 @@ namespace MeterDataService.Net48
                 _eventLog.WriteEntry(
                     string.Format("TCP Listener started on port {0}", _config.ListenPort),
                     EventLogEntryType.Information);
+                await _appLogger.LogInformationAsync(
+                    string.Format("TCP Listener started on port {0}", _config.ListenPort), "TcpListener");
 
                 while (!stoppingToken.IsCancellationRequested)
                 {
@@ -130,6 +146,8 @@ namespace MeterDataService.Net48
                             _eventLog.WriteEntry(
                                 string.Format("Error accepting TCP client: {0}", ex),
                                 EventLogEntryType.Error);
+                            await _appLogger.LogErrorAsync(
+                                "Error accepting TCP client", ex, "TcpListener");
                         }
                     }
                 }
@@ -140,6 +158,7 @@ namespace MeterDataService.Net48
                 catch { /* uz zastaveno */ }
 
                 _eventLog.WriteEntry("TCP Listener stopped", EventLogEntryType.Information);
+                await _appLogger.LogInformationAsync("TCP Listener stopped", "TcpListener");
             }
         }
 
@@ -148,6 +167,9 @@ namespace MeterDataService.Net48
             var clientEndpoint = client.Client.RemoteEndPoint != null
                 ? client.Client.RemoteEndPoint.ToString()
                 : "unknown";
+            var clientIp = (client.Client.RemoteEndPoint as IPEndPoint) != null
+                ? ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString()
+                : null;
 
             try
             {
@@ -196,6 +218,8 @@ namespace MeterDataService.Net48
                                     catch
                                     {
                                         // Pokud parse selze, pokracujeme standardni cestou
+                                        await _appLogger.LogWarningAsync(
+                                            "Failed to detect message format", "TcpListener", clientIp);
                                     }
 
                                     if (isDlms)
@@ -250,6 +274,9 @@ namespace MeterDataService.Net48
                                     _eventLog.WriteEntry(
                                         string.Format("Invalid JSON received: {0}", ex.Message),
                                         EventLogEntryType.Warning);
+                                    await _appLogger.LogErrorAsync(
+                                        string.Format("Invalid JSON received from {0}. JSON {1} ", clientEndpoint, jsonMessage), ex,
+                                        "TcpListener", clientIp);
 
                                     var errorResponse = "{\"status\":\"error\",\"message\":\"Invalid JSON\"}\n";
                                     var errorBytes = Encoding.UTF8.GetBytes(errorResponse);
@@ -258,12 +285,18 @@ namespace MeterDataService.Net48
                                 }
                             }
                         }
-                        catch (IOException)
+                        catch (IOException ex)
                         {
+                            await _appLogger.LogWarningAsync(
+                                string.Format("Connection closed by client {0}: {1}", clientEndpoint, ex.Message),
+                                "TcpListener", clientIp);
                             break;
                         }
-                        catch (SocketException)
+                        catch (SocketException ex)
                         {
+                            await _appLogger.LogWarningAsync(
+                                string.Format("Socket error with client {0}: {1}", clientEndpoint, ex.Message),
+                                "TcpListener", clientIp);
                             break;
                         }
                     }
@@ -278,6 +311,9 @@ namespace MeterDataService.Net48
                 _eventLog.WriteEntry(
                     string.Format("Error handling client {0}: {1}", clientEndpoint, ex),
                     EventLogEntryType.Error);
+                await _appLogger.LogErrorAsync(
+                    string.Format("Error handling client {0}", clientEndpoint),
+                    ex, "TcpListener", clientIp);
             }
             finally
             {

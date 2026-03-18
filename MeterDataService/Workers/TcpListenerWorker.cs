@@ -2,6 +2,7 @@
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using MeterDataService.Logging;
 using MeterDataService.Models;
 using MeterDataService.Providers;
 using Microsoft.Extensions.Options;
@@ -12,16 +13,19 @@ public class TcpListenerWorker : BackgroundService
 {
     private readonly ILogger<TcpListenerWorker> _logger;
     private readonly IDataProviderManager _providerManager;
+    private readonly IAppLogger _appLogger;
     private readonly ServiceConfiguration _config;
     private TcpListener? _listener;
 
     public TcpListenerWorker(
         ILogger<TcpListenerWorker> logger,
         IDataProviderManager providerManager,
+        IAppLogger appLogger,
         IOptions<ServiceConfiguration> config)
     {
         _logger = logger;
         _providerManager = providerManager;
+        _appLogger = appLogger;
         _config = config.Value;
     }
 
@@ -33,6 +37,8 @@ public class TcpListenerWorker : BackgroundService
         {
             _listener.Start();
             _logger.LogInformation("TCP Listener started on port {Port}", _config.ListenPort);
+            await _appLogger.LogInformationAsync(
+                $"TCP Listener started on port {_config.ListenPort}", "TcpListener");
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -48,6 +54,8 @@ public class TcpListenerWorker : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error accepting TCP client");
+                    await _appLogger.LogErrorAsync(
+                        "Error accepting TCP client", ex, "TcpListener");
                 }
             }
         }
@@ -55,18 +63,20 @@ public class TcpListenerWorker : BackgroundService
         {
             _listener.Stop();
             _logger.LogInformation("TCP Listener stopped");
+            await _appLogger.LogInformationAsync("TCP Listener stopped", "TcpListener");
         }
     }
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken stoppingToken)
     {
         var clientEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
+        var clientIp = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString();
         _logger.LogDebug("Client connected: {Endpoint}", clientEndpoint);
 
         try
         {
             await using NetworkStream stream = client.GetStream();
-
+            
             using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
 
             var buffer = new StringBuilder();
@@ -99,6 +109,7 @@ public class TcpListenerWorker : BackgroundService
                     {
                         try
                         {
+                            var receivedAt = DateTime.UtcNow;
                             // --- DLMS detection: peek at result.data value kind ---
                             bool isDlms = false;
                             try
@@ -160,12 +171,13 @@ public class TcpListenerWorker : BackgroundService
 
                                     _logger.LogInformation("Message processed and acknowledged for SN: {Sn}", message.Sn);
                                 }
-                            }
+                            }                                
                         }
                         catch (JsonException ex)
                         {
-                            // Catches deserialization failures from BOTH branches
                             _logger.LogWarning(ex, "Invalid JSON received: {Json}", jsonMessage);
+                            await _appLogger.LogErrorAsync(
+                                $"Invalid JSON received from {clientEndpoint}. JSON message {jsonMessage}", ex, "Error", clientIp);
                             var errorResponse = "{\"status\":\"error\",\"message\":\"Invalid JSON\"}\n";
                             var errorBytes = Encoding.UTF8.GetBytes(errorResponse);
                             await stream.WriteAsync(errorBytes, stoppingToken);
@@ -177,12 +189,16 @@ public class TcpListenerWorker : BackgroundService
                 {
                     // Connection was closed or reset by the client
                     _logger.LogDebug("Connection closed by client {Endpoint}: {Message}", clientEndpoint, ex.Message);
+                    await _appLogger.LogWarningAsync(
+                        $"Connection closed by client {clientEndpoint}: {ex.Message}", "TcpListener", clientIp);
                     break;
                 }
                 catch (SocketException ex)
                 {
                     // Socket error occurred
                     _logger.LogDebug("Socket error with client {Endpoint}: {Message}", clientEndpoint, ex.Message);
+                    await _appLogger.LogWarningAsync(
+                        $"Socket error with client {clientEndpoint}: {ex.Message}", "TcpListener", clientIp);
                     break;
                 }
             }
@@ -194,6 +210,8 @@ public class TcpListenerWorker : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling client {Endpoint}", clientEndpoint);
+            await _appLogger.LogErrorAsync(
+                $"Error handling client {clientEndpoint}", ex, "TcpListener", clientIp);
         }
         finally
         {

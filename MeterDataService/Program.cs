@@ -1,4 +1,5 @@
 using MeterDataService.Data;
+using MeterDataService.Logging;
 using MeterDataService.Models;
 using MeterDataService.Providers;
 using MeterDataService.Workers;
@@ -22,7 +23,6 @@ internal class Program
         });
 
         // SQLite DbContext (pro SqliteDataProvider)
-        // SQLite je souborová databáze - data se ukládají do souboru MeterData.db
         builder.Services.AddDbContextFactory<SqliteMeterDataContext>(options =>
         {
             var config = builder.Configuration.GetSection("ServiceConfiguration").Get<ServiceConfiguration>();
@@ -31,6 +31,21 @@ internal class Program
             // Connection string pro SQLite - "Data Source=cesta_k_souboru"
             options.UseSqlite($"Data Source={dbPath}");
         });
+
+        // Register App Logger - konfigurovatelný
+        var appLoggingConfig = builder.Configuration
+            .GetSection("ServiceConfiguration:AppLogging")
+            .Get<LoggingSettings>() ?? new LoggingSettings();
+
+        if (appLoggingConfig.Enabled &&
+            string.Equals(appLoggingConfig.Logger, "sqlite", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.Services.AddSingleton<IAppLogger, SqliteAppLogger>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IAppLogger, NullAppLogger>();
+        }
 
         // Register data providers
         builder.Services.AddSingleton<IDataProvider, CsvDataProvider>();
@@ -63,10 +78,28 @@ internal class Program
 
         // Automatická migrace pøi startu - SQLite
         // EnsureCreated() vytvoøí databázi a tabulky, pokud neexistují
+        // Pokud databáze existuje, vytvoøíme chybìjící tabulky ruènì
         using (var scope = host.Services.CreateScope())
         {
             var sqliteContext = scope.ServiceProvider.GetRequiredService<SqliteMeterDataContext>();
             sqliteContext.Database.EnsureCreated();
+
+            // Vytvoøení tabulky Logs, pokud neexistuje (pro pøípad existující databáze)
+            sqliteContext.Database.ExecuteSqlRaw("""
+                CREATE TABLE IF NOT EXISTS Logs (
+                    LogID INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Message TEXT NOT NULL,
+                    LogDate TEXT NOT NULL,
+                    IP TEXT,
+                    AppID TEXT DEFAULT 'MeterDataService',
+                    Severity TEXT NOT NULL,
+                    Type TEXT
+                );
+                CREATE INDEX IF NOT EXISTS IX_Logs_LogDate ON Logs(LogDate);
+                CREATE INDEX IF NOT EXISTS IX_Logs_Severity ON Logs(Severity);
+                CREATE INDEX IF NOT EXISTS IX_Logs_Type ON Logs(Type);
+                CREATE INDEX IF NOT EXISTS IX_Logs_Severity_LogDate ON Logs(Severity, LogDate);
+                """);
         }
 
         host.Run();

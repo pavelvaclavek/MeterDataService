@@ -12,6 +12,7 @@ namespace MeterDataService.Net48.Models
         public EmailSettings Email { get; set; } = new EmailSettings();
         public DatabaseSettings Database { get; set; } = new DatabaseSettings();
         public SqliteSettings Sqlite { get; set; } = new SqliteSettings();
+        public LoggingSettings AppLogging { get; set; } = new LoggingSettings();
 
         public static ServiceConfiguration Load()
         {
@@ -68,6 +69,15 @@ namespace MeterDataService.Net48.Models
             if (bool.TryParse(useSsl, out var ssl))
                 config.Email.UseSsl = ssl;
 
+            // App Logging
+            var logger = ConfigurationManager.AppSettings["AppLogging:Logger"];
+            if (!string.IsNullOrEmpty(logger))
+                config.AppLogging.Logger = logger;
+
+            var loggingEnabled = ConfigurationManager.AppSettings["AppLogging:Enabled"];
+            if (bool.TryParse(loggingEnabled, out var enabled))
+                config.AppLogging.Enabled = enabled;
+
             return config;
         }
     }
@@ -91,5 +101,21 @@ namespace MeterDataService.Net48.Models
     public class SqliteSettings
     {
         public string DatabasePath { get; set; } = "MeterData.db";
+    }
+
+    /// <summary>
+    /// Nastavení pro aplikaèní logování do databáze.
+    /// </summary>
+    public class LoggingSettings
+    {
+        /// <summary>
+        /// Typ loggeru: "sqlite" nebo "none".
+        /// </summary>
+        public string Logger { get; set; } = "sqlite";
+
+        /// <summary>
+        /// Povolit logování do databáze.
+        /// </summary>
+        public bool Enabled { get; set; } = true;
     }
 }

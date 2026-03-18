@@ -1,4 +1,5 @@
 using MeterDataService.Data;
+using MeterDataService.Logging;
 using MeterDataService.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -24,6 +25,7 @@ namespace MeterDataService.Providers;
 public partial class SqliteDataProvider : IDataProvider
 {
     private readonly ILogger<SqliteDataProvider> _logger;
+    private readonly IAppLogger _appLogger;
     private readonly IDbContextFactory<SqliteMeterDataContext> _contextFactory;
     private readonly ServiceConfiguration _config;
 
@@ -34,10 +36,12 @@ public partial class SqliteDataProvider : IDataProvider
 
     public SqliteDataProvider(
         ILogger<SqliteDataProvider> logger,
+        IAppLogger appLogger,
         IDbContextFactory<SqliteMeterDataContext> contextFactory,
         IOptions<ServiceConfiguration> config)
     {
         _logger = logger;
+        _appLogger = appLogger;
         _contextFactory = contextFactory;
         _config = config.Value;
     }
@@ -92,6 +96,8 @@ public partial class SqliteDataProvider : IDataProvider
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error saving data to SQLite for SN: {Sn}", message.Sn);
+            await _appLogger.LogErrorAsync(
+                $"Error saving data to SQLite for SN: {message.Sn}", ex, "Provider.sqlite");
             return false;
         }
     }

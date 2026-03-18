@@ -1,4 +1,5 @@
-﻿using MeterDataService.Models;
+﻿using MeterDataService.Logging;
+using MeterDataService.Models;
 using Microsoft.Extensions.Options;
 
 namespace MeterDataService.Providers
@@ -12,15 +13,18 @@ namespace MeterDataService.Providers
     {
         private readonly ILogger<DataProviderManager> _logger;
         private readonly IEnumerable<IDataProvider> _providers;
+        private readonly IAppLogger _appLogger;
         private readonly ServiceConfiguration _config;
 
         public DataProviderManager(
             ILogger<DataProviderManager> logger,
             IEnumerable<IDataProvider> providers,
+            IAppLogger appLogger,
             IOptions<ServiceConfiguration> config)
         {
             _logger = logger;
             _providers = providers;
+            _appLogger = appLogger;
             _config = config.Value;
         }
 
@@ -46,12 +50,18 @@ namespace MeterDataService.Providers
                 {
                     _logger.LogWarning("Provider {Provider} failed to process message SN: {Sn}",
                         provider.Name, message.Sn);
+                    await _appLogger.LogWarningAsync(
+                        $"Provider {provider.Name} failed to process message SN: {message.Sn}",
+                        $"Provider.{provider.Name}");
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Provider {Provider} threw exception for SN: {Sn}",
                     provider.Name, message.Sn);
+                await _appLogger.LogErrorAsync(
+                    $"Provider {provider.Name} threw exception for SN: {message.Sn}",
+                    ex, $"Provider.{provider.Name}");
             }
         }
     }

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MeterDataService.Net48.Logging;
 using MeterDataService.Net48.Models;
 
 namespace MeterDataService.Net48.Providers
@@ -16,15 +17,18 @@ namespace MeterDataService.Net48.Providers
     public class DataProviderManager : IDataProviderManager
     {
         private readonly EventLog _eventLog;
+        private readonly IAppLogger _appLogger;
         private readonly IEnumerable<IDataProvider> _providers;
         private readonly ServiceConfiguration _config;
 
         public DataProviderManager(
             EventLog eventLog,
+            IAppLogger appLogger,
             IEnumerable<IDataProvider> providers,
             ServiceConfiguration config)
         {
             _eventLog = eventLog;
+            _appLogger = appLogger;
             _providers = providers;
             _config = config;
         }
@@ -54,6 +58,9 @@ namespace MeterDataService.Net48.Providers
                     _eventLog.WriteEntry(
                         string.Format("Provider {0} failed to process message SN: {1}", provider.Name, message.Sn),
                         EventLogEntryType.Warning);
+                    await _appLogger.LogWarningAsync(
+                        string.Format("Provider {0} failed to process message SN: {1}", provider.Name, message.Sn),
+                        string.Format("Provider.{0}", provider.Name));
                 }
             }
             catch (Exception ex)
@@ -61,6 +68,9 @@ namespace MeterDataService.Net48.Providers
                 _eventLog.WriteEntry(
                     string.Format("Provider {0} threw exception for SN: {1}: {2}", provider.Name, message.Sn, ex),
                     EventLogEntryType.Error);
+                await _appLogger.LogErrorAsync(
+                    string.Format("Provider {0} threw exception for SN: {1}", provider.Name, message.Sn),
+                    ex, string.Format("Provider.{0}", provider.Name));
             }
         }
     }

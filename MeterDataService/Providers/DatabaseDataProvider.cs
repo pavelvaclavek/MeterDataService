@@ -1,4 +1,5 @@
 ﻿using MeterDataService.Data;
+using MeterDataService.Logging;
 using MeterDataService.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
@@ -9,15 +10,18 @@ namespace MeterDataService.Providers;
 public partial class DatabaseDataProvider : IDataProvider
 {
     private readonly ILogger<DatabaseDataProvider> _logger;
+    private readonly IAppLogger _appLogger;
     private readonly IDbContextFactory<MeterDataContext> _contextFactory;
 
     public string Name => "database";
 
     public DatabaseDataProvider(
         ILogger<DatabaseDataProvider> logger,
+        IAppLogger appLogger,
         IDbContextFactory<MeterDataContext> contextFactory)
     {
         _logger = logger;
+        _appLogger = appLogger;
         _contextFactory = contextFactory;
     }
 
@@ -58,6 +62,8 @@ public partial class DatabaseDataProvider : IDataProvider
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error saving data to database for SN: {Sn}", message.Sn);
+            await _appLogger.LogErrorAsync(
+                $"Error saving data to database for SN: {message.Sn}", ex, "Provider.database");
             return false;
         }
     }

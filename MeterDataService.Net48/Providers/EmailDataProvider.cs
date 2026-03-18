@@ -5,6 +5,7 @@ using System.Net.Mail;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MeterDataService.Net48.Logging;
 using MeterDataService.Net48.Models;
 
 namespace MeterDataService.Net48.Providers
@@ -12,13 +13,15 @@ namespace MeterDataService.Net48.Providers
     public class EmailDataProvider : IDataProvider
     {
         private readonly EventLog _eventLog;
+        private readonly IAppLogger _appLogger;
         private readonly ServiceConfiguration _config;
 
         public string Name => "email";
 
-        public EmailDataProvider(EventLog eventLog, ServiceConfiguration config)
+        public EmailDataProvider(EventLog eventLog, IAppLogger appLogger, ServiceConfiguration config)
         {
             _eventLog = eventLog;
+            _appLogger = appLogger;
             _config = config;
         }
 
@@ -27,6 +30,8 @@ namespace MeterDataService.Net48.Providers
             if (string.IsNullOrEmpty(_config.Email.SmtpServer))
             {
                 _eventLog.WriteEntry("Email provider is enabled but SMTP server is not configured", EventLogEntryType.Warning);
+                await _appLogger.LogWarningAsync(
+                    "Email provider is enabled but SMTP server is not configured", "Provider.email");
                 return false;
             }
 
@@ -67,6 +72,9 @@ namespace MeterDataService.Net48.Providers
                 _eventLog.WriteEntry(
                     string.Format("Error sending email for SN: {0}: {1}", message.Sn, ex),
                     EventLogEntryType.Error);
+                await _appLogger.LogErrorAsync(
+                    string.Format("Error sending email for SN: {0}", message.Sn),
+                    ex, "Provider.email");
                 return false;
             }
         }

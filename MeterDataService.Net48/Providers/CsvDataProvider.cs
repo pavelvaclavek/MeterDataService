@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using MeterDataService.Net48.Logging;
 using MeterDataService.Net48.Models;
 
 namespace MeterDataService.Net48.Providers
@@ -14,14 +15,16 @@ namespace MeterDataService.Net48.Providers
     public class CsvDataProvider : IDataProvider
     {
         private readonly EventLog _eventLog;
+        private readonly IAppLogger _appLogger;
         private readonly ServiceConfiguration _config;
         private readonly SemaphoreSlim _fileLock = new SemaphoreSlim(1, 1);
 
         public string Name => "csv";
 
-        public CsvDataProvider(EventLog eventLog, ServiceConfiguration config)
+        public CsvDataProvider(EventLog eventLog, IAppLogger appLogger, ServiceConfiguration config)
         {
             _eventLog = eventLog;
+            _appLogger = appLogger;
             _config = config;
         }
 
@@ -77,6 +80,9 @@ namespace MeterDataService.Net48.Providers
                 _eventLog.WriteEntry(
                     string.Format("Error saving data to CSV for SN: {0}: {1}", message.Sn, ex),
                     EventLogEntryType.Error);
+                await _appLogger.LogErrorAsync(
+                    string.Format("Error saving data to CSV for SN: {0}", message.Sn),
+                    ex, "Provider.csv");
                 return false;
             }
         }

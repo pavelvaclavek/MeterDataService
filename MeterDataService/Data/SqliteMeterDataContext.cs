@@ -19,6 +19,11 @@ public class SqliteMeterDataContext : DbContext
     /// </summary>
     public DbSet<SqliteMeterReading> MeterReadings => Set<SqliteMeterReading>();
 
+    /// <summary>
+    /// Tabulka pro ukládání aplikačních logů.
+    /// </summary>
+    public DbSet<AppLogEntry> Logs => Set<AppLogEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -32,6 +37,17 @@ public class SqliteMeterDataContext : DbContext
             entity.HasIndex(e => e.SerialNumber);
             entity.HasIndex(e => e.Timestamp);
             entity.HasIndex(e => new { e.SerialNumber, e.Timestamp });
+        });
+
+        modelBuilder.Entity<AppLogEntry>(entity =>
+        {
+            entity.ToTable("Logs");
+
+            // Indexy pro rychlejší vyhledávání logů
+            entity.HasIndex(e => e.LogDate);
+            entity.HasIndex(e => e.Severity);
+            entity.HasIndex(e => e.Type);
+            entity.HasIndex(e => new { e.Severity, e.LogDate });
         });
     }
 }
