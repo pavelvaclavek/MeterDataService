@@ -31,6 +31,8 @@ namespace MeterDataService.Web.Controllers
         ///   serialNumber - filtr podle sériového čísla (částečná shoda)
         ///   createdAtFrom - filtr od data (formát: yyyy-MM-dd)
         ///   createdAtTo   - filtr do data (formát: yyyy-MM-dd)
+        ///   sortBy  - sloupec pro řazení (SerialNumber, Model, CreatedAt)
+        ///   sortDir - směr řazení (asc, desc)
         /// </summary>
         [HttpGet]
         [Route("api/data")]
@@ -39,7 +41,9 @@ namespace MeterDataService.Web.Controllers
             int limit = 20,
             string serialNumber = null,
             string createdAtFrom = null,
-            string createdAtTo = null)
+            string createdAtTo = null,
+            string sortBy = "CreatedAt",
+            string sortDir = "desc")
         {
             try
             {
@@ -47,7 +51,7 @@ namespace MeterDataService.Web.Controllers
                 DateTime? dateFrom = ParseDate(createdAtFrom);
                 DateTime? dateTo = ParseDate(createdAtTo);
 
-                var result = _dataProvider.GetReadings(offset, limit, serialNumber, dateFrom, dateTo);
+                var result = _dataProvider.GetReadings(offset, limit, serialNumber, dateFrom, dateTo, sortBy, sortDir);
                 return Ok(result);
             }
             catch (Exception ex)

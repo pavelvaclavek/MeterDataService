@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using MeterDataService.Web.Models;
 
 namespace MeterDataService.Web.Data
@@ -27,21 +28,32 @@ namespace MeterDataService.Web.Data
             _connectionString = string.Format("Data Source={0};Version=3;Read Only=True;", databasePath);
         }
 
+        // Povolené sloupce pro řazení (whitelist - ochrana proti SQL injection)
+        private static readonly HashSet<string> AllowedSortColumns = new HashSet<string>(
+            StringComparer.OrdinalIgnoreCase)
+        {
+            "SerialNumber", "Model", "CreatedAt"
+        };
+
         /// <summary>
-        /// Načte stránkovaná data z tabulky MeterReadings s volitelným filtrováním.
+        /// Načte stránkovaná data z tabulky MeterReadings s volitelným filtrováním a řazením.
         /// </summary>
         /// <param name="offset">Počet záznamů k přeskočení (pro stránkování).</param>
         /// <param name="limit">Maximální počet vrácených záznamů.</param>
         /// <param name="serialNumber">Filtr podle sériového čísla (volitelný, částečná shoda).</param>
         /// <param name="createdAtFrom">Filtr podle data vytvoření - od (volitelný).</param>
         /// <param name="createdAtTo">Filtr podle data vytvoření - do (volitelný).</param>
+        /// <param name="sortBy">Sloupec pro řazení (whitelist: SerialNumber, Model, CreatedAt).</param>
+        /// <param name="sortDir">Řazení vzestupně (asc) nebo sestupně (desc).</param>
         /// <returns>Stránkovaný výsledek s daty a celkovým počtem.</returns>
         public PagedResult<MeterReadingDto> GetReadings(
             int offset,
             int limit,
             string serialNumber = null,
             DateTime? createdAtFrom = null,
-            DateTime? createdAtTo = null)
+            DateTime? createdAtTo = null,
+            string sortBy = "CreatedAt",
+            string sortDir = "desc")
         {
             // Validace vstupních parametrů
             if (offset < 0) offset = 0;
@@ -99,14 +111,19 @@ namespace MeterDataService.Web.Data
                     totalCount = Convert.ToInt32(cmd.ExecuteScalar());
                 }
 
+                // Sestavení ORDER BY klauzule (řazení je validováno přes whitelist)
+                var orderColumn = AllowedSortColumns.Contains(sortBy ?? "") ? sortBy : "CreatedAt";
+                var orderDir = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase)
+                    ? "ASC" : "DESC";
+
                 // Dotaz na samotná data se stránkováním
                 var dataSql = string.Format(
                     @"SELECT Id, SerialNumber, Timestamp, MessageId, Network, Model, System,
                              Data_1_8_0, Data_1_8_1, Data_1_8_2, Data_2_8_0, CreatedAt
                       FROM MeterReadings {0}
-                      ORDER BY CreatedAt DESC
+                      ORDER BY {1} {2}
                       LIMIT @Limit OFFSET @Offset",
-                    whereClause);
+                    whereClause, orderColumn, orderDir);
 
                 using (var cmd = new SQLiteCommand(dataSql, connection))
                 {

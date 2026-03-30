@@ -4,62 +4,211 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MeterDataService - Přehled měření</title>
-    <!-- Bootstrap 5 CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-          rel="stylesheet"
-          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YcnS/1TyKZNjfBs23BRp0cIdQQGEwfhHr4g"
-          crossorigin="anonymous" />
+    <!-- Bootstrap 5 - lokální kopie (bez závislosti na CDN) -->
+    <link href="/lib/bootstrap.min.css" rel="stylesheet" />
     <style>
-        body { padding-top: 20px; }
-        .table-responsive { margin-top: 15px; }
-        .pagination-info { line-height: 38px; }
+        body {
+            padding-top: 16px;
+            background-color: #f5f7fa;
+        }
+
+        /* === Hlavička stránky === */
+        .page-header {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+            color: #fff;
+            padding: 18px 24px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .page-header h2 {
+            margin: 0;
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        /* === Filtrační panel === */
+        .filter-card {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            margin-bottom: 12px;
+        }
+        .filter-card .card-body { padding: 12px 16px; }
+
+        /* === Toolbar (info + page size) === */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        /* === Tabulka - optimalizace pro mnoho sloupců === */
+        .table-wrapper {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            white-space: nowrap;
+            margin: 0;
+        }
+        .data-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #1e3a5f;
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            padding: 8px 10px;
+            border-bottom: 2px solid #15294a;
+            white-space: nowrap;
+        }
+        .data-table tbody td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #e9ecef;
+            vertical-align: middle;
+        }
+        .data-table tbody tr:hover {
+            background-color: #edf2f9;
+        }
+        .data-table tbody tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .data-table tbody tr:nth-child(even):hover {
+            background-color: #edf2f9;
+        }
+
+        /* Fixní první dva sloupce (ID + SN) pro lepší orientaci ve wide tabulce */
+        .data-table thead th.col-sticky,
+        .data-table tbody td.col-sticky {
+            position: sticky;
+            z-index: 1;
+        }
+        .data-table thead th.col-sticky { z-index: 3; background: #1e3a5f; color: #fff; }
+        .data-table tbody td.col-sticky { background: #fff; }
+        .data-table tbody tr:nth-child(even) td.col-sticky { background: #f8f9fa; }
+        .data-table tbody tr:hover td.col-sticky { background: #edf2f9; }
+        .data-table .col-id   { left: 0; min-width: 50px; }
+        .data-table .col-sn   { left: 50px; min-width: 120px; border-right: 2px solid #dee2e6; }
+        .data-table thead .col-sn { border-right-color: #15294a; }
+
+        /* Zvýraznění sériového čísla */
+        .sn-badge {
+            font-weight: 600;
+            color: #1e3a5f;
+        }
+
+        /* Číselné sloupce zarovnané vpravo */
+        .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
+
+        /* Řaditelné sloupce */
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 20px !important;
+        }
+        .sortable:hover { background: #2c5282; }
+        .sortable::after {
+            content: '\2195';
+            position: absolute;
+            right: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.4;
+            font-size: 0.75rem;
+        }
+        .sortable.sort-asc::after { content: '\25B2'; opacity: 1; }
+        .sortable.sort-desc::after { content: '\25BC'; opacity: 1; }
+
+        /* === Stránkování === */
+        .pagination-row {
+            display: flex;
+            justify-content: center;
+            padding: 12px 0;
+        }
+        .pagination { margin: 0; }
+        .page-link { font-size: 0.85rem; }
+
+        /* === Loading overlay === */
         .loading-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(255,255,255,0.7); z-index: 9999;
             display: none; align-items: center; justify-content: center;
         }
         .loading-overlay.active { display: flex; }
+
+        /* === Prázdný stav === */
+        .empty-state {
+            text-align: center;
+            padding: 32px 16px;
+            color: #6c757d;
+        }
+        .empty-state svg { margin-bottom: 8px; opacity: 0.5; }
     </style>
 </head>
 <body>
     <!-- Překrytí při načítání -->
     <div id="loadingOverlay" class="loading-overlay">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Načítání...</span>
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-2" role="status"></div>
+            <div class="text-muted small">Načítání dat...</div>
         </div>
     </div>
 
-    <div class="container-fluid">
-        <h2 class="mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor"
-                 class="bi bi-lightning-charge me-2" viewBox="0 0 16 16">
-                <path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.09z"/>
-            </svg>
-            MeterDataService – Přehled měření
-        </h2>
+    <div class="container-fluid px-3">
+        <!-- Hlavička -->
+        <div class="page-header">
+            <h2>
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor"
+                     class="me-2" viewBox="0 0 16 16" style="vertical-align: -2px;">
+                    <path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.09z"/>
+                </svg>
+                MeterDataService &ndash; Přehled měření
+            </h2>
+        </div>
 
         <!-- Filtrační formulář -->
-        <div class="card mb-3">
+        <div class="card filter-card">
             <div class="card-body">
-                <form id="filterForm" class="row g-3 align-items-end">
-                    <div class="col-md-3">
-                        <label for="filterSerialNumber" class="form-label">Sériové číslo</label>
-                        <input type="text" class="form-control" id="filterSerialNumber"
+                <form id="filterForm" class="row g-2 align-items-end">
+                    <div class="col-lg-3 col-md-6">
+                        <label for="filterSerialNumber" class="form-label small mb-1">Sériové číslo</label>
+                        <input type="text" class="form-control form-control-sm" id="filterSerialNumber"
                                placeholder="Hledat dle sériového čísla..." />
                     </div>
-                    <div class="col-md-3">
-                        <label for="filterDateFrom" class="form-label">Vytvořeno od</label>
-                        <input type="date" class="form-control" id="filterDateFrom" />
+                    <div class="col-lg-2 col-md-3">
+                        <label for="filterDateFrom" class="form-label small mb-1">Vytvořeno od</label>
+                        <input type="date" class="form-control form-control-sm" id="filterDateFrom" />
                     </div>
-                    <div class="col-md-3">
-                        <label for="filterDateTo" class="form-label">Vytvořeno do</label>
-                        <input type="date" class="form-control" id="filterDateTo" />
+                    <div class="col-lg-2 col-md-3">
+                        <label for="filterDateTo" class="form-label small mb-1">Vytvořeno do</label>
+                        <input type="date" class="form-control form-control-sm" id="filterDateTo" />
                     </div>
-                    <div class="col-md-3">
-                        <button type="submit" class="btn btn-primary me-2">
+                    <div class="col-lg-3 col-md-6">
+                        <button type="submit" class="btn btn-primary btn-sm me-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                 class="me-1" viewBox="0 0 16 16">
+                                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
+                            </svg>
                             Filtrovat
                         </button>
-                        <button type="button" class="btn btn-outline-secondary" id="btnReset">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnReset">
                             Resetovat
                         </button>
                     </div>
@@ -67,14 +216,12 @@
             </div>
         </div>
 
-        <!-- Informace o stránkování a počet výsledků -->
-        <div class="row mb-2">
-            <div class="col-md-6">
-                <span id="resultInfo" class="text-muted"></span>
-            </div>
-            <div class="col-md-6 text-end">
-                <label class="me-2">Záznamů na stránku:</label>
-                <select id="pageSizeSelect" class="form-select d-inline-block" style="width: auto;">
+        <!-- Toolbar: info + výběr počtu záznamů -->
+        <div class="toolbar">
+            <span id="resultInfo" class="text-muted small"></span>
+            <div class="d-flex align-items-center gap-2">
+                <label class="small text-muted mb-0">Záznamů:</label>
+                <select id="pageSizeSelect" class="form-select form-select-sm" style="width: 70px;">
                     <option value="10">10</option>
                     <option value="20" selected>20</option>
                     <option value="50">50</option>
@@ -84,50 +231,56 @@
         </div>
 
         <!-- Tabulka s daty -->
-        <div class="table-responsive">
-            <table class="table table-striped table-hover table-bordered">
-                <thead class="table-dark">
-                    <tr>
-                        <th>ID</th>
-                        <th>Sériové číslo</th>
-                        <th>Timestamp</th>
-                        <th>Síť</th>
-                        <th>Model</th>
-                        <th>1.8.0 (kWh)</th>
-                        <th>1.8.1 (kWh)</th>
-                        <th>1.8.2 (kWh)</th>
-                        <th>2.8.0 (kWh)</th>
-                        <th>Vytvořeno</th>
-                    </tr>
-                </thead>
-                <tbody id="dataTableBody">
-                    <tr>
-                        <td colspan="10" class="text-center text-muted">Načítání dat...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <div class="table-wrapper">
+            <div class="table-scroll">
+                <table class="data-table" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th class="col-sticky col-id">ID</th>
+                            <th class="col-sticky col-sn sortable" data-sort="SerialNumber">Sériové číslo</th>
+                            <th>Timestamp</th>
+                            <th>MessageId</th>
+                            <th>Síť</th>
+                            <th class="sortable" data-sort="Model">Model</th>
+                            <th>Systém</th>
+                            <th class="num-cell">1.8.0 (kWh)</th>
+                            <th class="num-cell">1.8.1 (kWh)</th>
+                            <th class="num-cell">1.8.2 (kWh)</th>
+                            <th class="num-cell">2.8.0 (kWh)</th>
+                            <th class="sortable" data-sort="CreatedAt">Vytvořeno</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody">
+                        <tr>
+                            <td colspan="12" class="empty-state">Načítání dat...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
-        <!-- Stránkování -->
-        <nav aria-label="Stránkování">
-            <ul class="pagination justify-content-center" id="pagination">
-            </ul>
-        </nav>
+            <!-- Stránkování -->
+            <div class="pagination-row">
+                <ul class="pagination pagination-sm" id="pagination"></ul>
+            </div>
+        </div>
     </div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-            crossorigin="anonymous"></script>
+    <!-- Bootstrap JS - lokální kopie -->
+    <script src="/lib/bootstrap.bundle.min.js"></script>
 
     <script>
         (function () {
             'use strict';
 
+            // === Počet sloupců v tabulce (pro colspan u prázdného stavu) ===
+            var COL_COUNT = 12;
+
             // === Stavové proměnné ===
             var currentOffset = 0;
             var currentLimit = 20;
             var totalCount = 0;
+            var currentSortBy = 'CreatedAt';   // Výchozí řazení podle data vytvoření
+            var currentSortDir = 'desc';        // Výchozí směr řazení (nejnovější první)
 
             // === DOM prvky ===
             var tableBody = document.getElementById('dataTableBody');
@@ -153,6 +306,8 @@
                 if (serialNumber) params.push('serialNumber=' + encodeURIComponent(serialNumber));
                 if (dateFrom) params.push('createdAtFrom=' + encodeURIComponent(dateFrom));
                 if (dateTo) params.push('createdAtTo=' + encodeURIComponent(dateTo));
+                if (currentSortBy) params.push('sortBy=' + encodeURIComponent(currentSortBy));
+                if (currentSortDir) params.push('sortDir=' + encodeURIComponent(currentSortDir));
 
                 var url = '/api/data?' + params.join('&');
 
@@ -191,8 +346,11 @@
             function renderTable(data) {
                 if (!data || data.length === 0) {
                     tableBody.innerHTML =
-                        '<tr><td colspan="10" class="text-center text-muted">' +
-                        'Žádná data nenalezena.</td></tr>';
+                        '<tr><td colspan="' + COL_COUNT + '" class="empty-state">' +
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 16 16">' +
+                        '<path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>' +
+                        '<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>' +
+                        '</svg><br>Žádná data nenalezena.</td></tr>';
                     return;
                 }
 
@@ -200,15 +358,17 @@
                 for (var i = 0; i < data.length; i++) {
                     var row = data[i];
                     html += '<tr>';
-                    html += '<td>' + escapeHtml(row.id) + '</td>';
-                    html += '<td><strong>' + escapeHtml(row.serialNumber) + '</strong></td>';
+                    html += '<td class="col-sticky col-id">' + escapeHtml(row.id) + '</td>';
+                    html += '<td class="col-sticky col-sn"><span class="sn-badge">' + escapeHtml(row.serialNumber) + '</span></td>';
                     html += '<td>' + formatDateTime(row.timestamp) + '</td>';
+                    html += '<td>' + escapeHtml(row.messageId) + '</td>';
                     html += '<td>' + escapeHtml(row.network) + '</td>';
                     html += '<td>' + escapeHtml(row.model) + '</td>';
-                    html += '<td>' + formatNumber(row.data_1_8_0) + '</td>';
-                    html += '<td>' + formatNumber(row.data_1_8_1) + '</td>';
-                    html += '<td>' + formatNumber(row.data_1_8_2) + '</td>';
-                    html += '<td>' + formatNumber(row.data_2_8_0) + '</td>';
+                    html += '<td>' + escapeHtml(row.system) + '</td>';
+                    html += '<td class="num-cell">' + formatNumber(row.data_1_8_0) + '</td>';
+                    html += '<td class="num-cell">' + formatNumber(row.data_1_8_1) + '</td>';
+                    html += '<td class="num-cell">' + formatNumber(row.data_1_8_2) + '</td>';
+                    html += '<td class="num-cell">' + formatNumber(row.data_2_8_0) + '</td>';
                     html += '<td>' + formatDateTime(row.createdAt) + '</td>';
                     html += '</tr>';
                 }
@@ -239,7 +399,7 @@
                 if (startPage > 1) {
                     html += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
                     if (startPage > 2) {
-                        html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                        html += '<li class="page-item disabled"><span class="page-link">&hellip;</span></li>';
                     }
                 }
 
@@ -251,7 +411,7 @@
 
                 if (endPage < totalPages) {
                     if (endPage < totalPages - 1) {
-                        html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                        html += '<li class="page-item disabled"><span class="page-link">&hellip;</span></li>';
                     }
                     html += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
                 }
@@ -272,12 +432,12 @@
                 }
                 var from = currentOffset + 1;
                 var to = Math.min(currentOffset + currentLimit, totalCount);
-                resultInfo.textContent = 'Zobrazeno ' + from + ' – ' + to + ' z ' + totalCount + ' záznamů';
+                resultInfo.textContent = 'Zobrazeno ' + from + ' \u2013 ' + to + ' z ' + totalCount + ' záznamů';
             }
 
             // === Pomocné funkce ===
             function escapeHtml(value) {
-                if (value === null || value === undefined) return '–';
+                if (value === null || value === undefined) return '\u2013';
                 var str = String(value);
                 var div = document.createElement('div');
                 div.appendChild(document.createTextNode(str));
@@ -285,12 +445,12 @@
             }
 
             function formatNumber(value) {
-                if (value === null || value === undefined) return '–';
+                if (value === null || value === undefined) return '\u2013';
                 return Number(value).toFixed(2);
             }
 
             function formatDateTime(value) {
-                if (!value) return '–';
+                if (!value) return '\u2013';
                 try {
                     var d = new Date(value);
                     if (isNaN(d.getTime())) return escapeHtml(value);
@@ -310,7 +470,7 @@
 
             function showError(message) {
                 tableBody.innerHTML =
-                    '<tr><td colspan="10" class="text-center text-danger">' +
+                    '<tr><td colspan="' + COL_COUNT + '" class="empty-state text-danger">' +
                     escapeHtml(message) + '</td></tr>';
                 pagination.innerHTML = '';
                 resultInfo.textContent = '';
@@ -359,7 +519,39 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             });
 
+            // Kliknutí na řaditelný sloupec
+            document.querySelector('.data-table thead').addEventListener('click', function (e) {
+                var th = e.target.closest('.sortable');
+                if (!th) return;
+
+                var sortField = th.getAttribute('data-sort');
+                if (currentSortBy === sortField) {
+                    // Přepnutí směru řazení
+                    currentSortDir = (currentSortDir === 'asc') ? 'desc' : 'asc';
+                } else {
+                    currentSortBy = sortField;
+                    currentSortDir = 'asc';
+                }
+                currentOffset = 0;
+
+                // Aktualizace vizuální indikace řazení
+                updateSortIndicators();
+                loadData();
+            });
+
+            // Aktualizace šipek řazení v hlavičce
+            function updateSortIndicators() {
+                var allSortable = document.querySelectorAll('.data-table thead .sortable');
+                for (var i = 0; i < allSortable.length; i++) {
+                    allSortable[i].classList.remove('sort-asc', 'sort-desc');
+                    if (allSortable[i].getAttribute('data-sort') === currentSortBy) {
+                        allSortable[i].classList.add(currentSortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+                    }
+                }
+            }
+
             // === Úvodní načtení dat ===
+            updateSortIndicators();
             loadData();
         })();
     </script>
